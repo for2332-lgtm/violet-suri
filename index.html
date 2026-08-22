@@ -389,7 +389,7 @@ function loadProgress(){
     d.state.forEach((s,i)=>{if(state[i])Object.assign(state[i],s);});
     curSet=Math.min(Math.max(d.curSet||0,0),SETS.length-1);
     cur=Math.min(Math.max(d.cur||0,0),PROBLEMS.length-1);
-    return state.some(s=>(s.attempts&&s.attempts.length)||s.solved||s.revealed);
+    return state.some(s=>(s.attempts&&s.attempts.length)||s.solved||s.revealed||(s.placed&&s.placed.length));
   }catch(e){return false;}
 }
 function resetProgress(){try{localStorage.removeItem(LSKEY);}catch(e){}location.reload();}
