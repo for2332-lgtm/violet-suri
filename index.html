@@ -107,6 +107,9 @@
   .free-input::placeholder{font-family:'Noto Sans KR';font-weight:400;font-size:14px;color:#B3A6C6;}
   .free-input:focus{outline:none;border-color:var(--deep);box-shadow:0 0 0 3px rgba(128,76,173,.12);}
   .builder-hint{font-size:11.5px;color:#9485AE;margin-top:9px;}
+  .undo-row{margin-top:9px;}
+  .undo-btn{background:var(--soft);border:1.5px solid var(--deep);color:var(--deepest);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;}
+  .undo-btn:active{background:#E7D6F5;}
   .builder-hint b{color:var(--deep);}
   .row{display:flex;gap:12px;align-items:center;margin-top:14px;flex-wrap:wrap;}
   button.submit{background:var(--deep);color:#fff;border:none;border-radius:10px;padding:12px 28px;font-size:14.5px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;transition:background .15s;}
@@ -352,6 +355,11 @@ function variantForms(word){
 
 /* ---------- state ---------- */
 const state=PROBLEMS.map(()=>({tryNum:1,attempts:[],solved:false,revealed:false,react:'idle',firstTryWrong:false,placed:[],usedBank:{}}));
+/* 멀티터치(확대/축소) 중 단어 탭이 삭제로 오작동하지 않도록 가드 */
+let PINCH=false,_pinchTO=null;
+document.addEventListener('touchstart',e=>{ if(e.touches&&e.touches.length>1){ PINCH=true; if(_pinchTO){clearTimeout(_pinchTO);_pinchTO=null;} } },{passive:true,capture:true});
+document.addEventListener('touchend',e=>{ if(e.touches&&e.touches.length===0){ if(_pinchTO)clearTimeout(_pinchTO); _pinchTO=setTimeout(()=>{PINCH=false;},150); } },{passive:true,capture:true});
+document.addEventListener('touchcancel',()=>{ if(_pinchTO)clearTimeout(_pinchTO); _pinchTO=setTimeout(()=>{PINCH=false;},150); },{passive:true,capture:true});
 let curSet=0, cur=0;
 let view='solve'; // 'solve' | 'kkam' | 'comp'
 
@@ -455,7 +463,8 @@ function renderStage(){
     html+='<div class="notezone">'
       +'<span class="note-label">MY SYNTAX NOTE <span>· 답안 배치</span></span>'
       +'<div class="'+stripCls+'" id="strip">'+toks+'<span class="tok-add" id="addTok">＋ 단어</span></div>'
-      +'<div class="builder-hint">보기 단어를 <b>탭</b>해 배치 · 배치된 단어를 <b>탭</b>하면 제거 · <b>꾹 누르거나 더블탭</b>하면 형태 변형(-s·-ing·과거형 등) · <b>＋단어</b>로 보기에 없는 단어 추가</div>'
+      +(st.undo?('<div class="undo-row"><button class="undo-btn" id="undoBtn">↩︎ 방금 지운 &lsquo;'+esc(st.undo.t.text)+'&rsquo; 되돌리기</button></div>'):'')
+      +'<div class="builder-hint">보기 단어를 <b>탭</b>해 배치 · 배치된 단어를 <b>탭</b>하면 제거(실수로 지워도 <b>되돌리기</b>) · <b>꾹 누르거나 더블탭</b>하면 형태 변형(-s·-ing·과거형 등) · <b>＋단어</b>로 보기에 없는 단어 추가</div>'
       +'<img class="note-coffee" src="'+sticker('b_06')+'" alt="">'
       +'<div class="row"><button class="submit" id="submitBtn">제출하기</button><span class="try-count">Attempt <b>'+st.tryNum+'</b> / '+MAX+'</span></div>'
       +'</div>';
@@ -474,22 +483,25 @@ function wireSolve(p,st){
       if(st.usedBank[bi]) return;      // already placed (elimination)
       st.usedBank[bi]=true;
       st.placed.push({text:p.bank[bi], base:p.bank[bi], bankIdx:bi, changed:false});
+      st.undo=null;
       renderStage();
     });
   });
   // placed token: single tap=remove, long-press OR double-tap=transform
   [...stageEl.querySelectorAll('.tok')].forEach(el=>{
     const ti=+el.dataset.ti;
-    let pressTimer=null,longFired=false,clickTimer=null,clicks=0;
-    const start=()=>{longFired=false;pressTimer=setTimeout(()=>{longFired=true;openTransform(p,st,ti);},450);};
+    let pressTimer=null,longFired=false,clickTimer=null,clicks=0,moved=false;
+    const start=()=>{longFired=false;moved=false;pressTimer=setTimeout(()=>{longFired=true;if(!PINCH)openTransform(p,st,ti);},450);};
     const cancel=()=>{if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}};
     el.addEventListener('pointerdown',start);
+    el.addEventListener('pointermove',()=>{moved=true;cancel();});
     el.addEventListener('pointerup',cancel);
     el.addEventListener('pointerleave',cancel);
     el.addEventListener('pointercancel',cancel);
     el.addEventListener('click',e=>{
       e.preventDefault();
       if(longFired){longFired=false;return;}   // long-press already handled it
+      if(PINCH||moved){moved=false;return;}     // 확대/축소·드래그 중 오삭제 방지
       clicks++;
       if(clicks===1){
         clickTimer=setTimeout(()=>{clicks=0;removeToken(st,ti);renderStage();},260); // wait for possible 2nd tap
@@ -498,6 +510,8 @@ function wireSolve(p,st){
       }
     });
   });
+  const ub=document.getElementById('undoBtn');
+  if(ub) ub.addEventListener('click',()=>{const u=st.undo;if(!u)return;const at=Math.min(Math.max(u.ti,0),st.placed.length);st.placed.splice(at,0,u.t);if(u.t.bankIdx!=null)st.usedBank[u.t.bankIdx]=true;st.undo=null;renderStage();});
   const add=document.getElementById('addTok');
   if(add) add.addEventListener('click',()=>openAdd(p,st));
   const fi=document.getElementById('freeInput');
@@ -511,7 +525,7 @@ function wireSolve(p,st){
   if(nb) nb.addEventListener('click',()=>{const s=SETS[curSet];const pos=s.indexOf(p);if(pos<s.length-1){cur=gidx(s[pos+1]);renderNav();renderStage();window.scrollTo({top:0,behavior:'smooth'});}else{if(setDone(curSet))openKkam();}});
 }
 
-function removeToken(st,ti){const t=st.placed[ti];if(t&&t.bankIdx!=null)delete st.usedBank[t.bankIdx];st.placed.splice(ti,1);}
+function removeToken(st,ti){const t=st.placed[ti];if(!t)return;if(t.bankIdx!=null)delete st.usedBank[t.bankIdx];st.placed.splice(ti,1);st.undo={ti,t};}
 
 function closePop(){popRoot.innerHTML='';}
 function openTransform(p,st,ti){
@@ -532,7 +546,7 @@ function openTransform(p,st,ti){
   document.getElementById('rmBtn').addEventListener('click',()=>{removeToken(st,ti);closePop();renderStage();});
   document.getElementById('clBtn').addEventListener('click',closePop);
 }
-function applyForm(st,ti,val){const t=st.placed[ti];if(!t)return;t.text=val;t.changed=(norm(val)!==norm(t.base));}
+function applyForm(st,ti,val){const t=st.placed[ti];if(!t)return;t.text=val;t.changed=(norm(val)!==norm(t.base));st.undo=null;}
 function openAdd(p,st){
   popRoot.innerHTML='<div class="pop-mask" id="mask"><div class="pop">'
     +'<h4>단어 추가</h4><div class="base" style="font-size:14px;color:#7A6E92">보기에 없는 단어(to, as, who 등)나 필요한 단어를 넣으세요.</div>'
@@ -540,7 +554,7 @@ function openAdd(p,st){
     +'<div class="pop-actions"><span></span><button class="cl" id="clBtn">닫기</button></div>'
     +'</div></div>';
   document.getElementById('mask').addEventListener('click',e=>{if(e.target.id==='mask')closePop();});
-  const doAdd=()=>{const v=document.getElementById('ainp').value.trim();if(v){st.placed.push({text:v,base:v,bankIdx:null,changed:false});closePop();renderStage();}};
+  const doAdd=()=>{const v=document.getElementById('ainp').value.trim();if(v){st.placed.push({text:v,base:v,bankIdx:null,changed:false});st.undo=null;closePop();renderStage();}};
   document.getElementById('aok').addEventListener('click',doAdd);
   const ai=document.getElementById('ainp');ai.addEventListener('keydown',e=>{if(e.key==='Enter')doAdd();});
   setTimeout(()=>ai.focus(),50);
