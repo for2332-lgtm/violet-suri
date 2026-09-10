@@ -135,6 +135,10 @@
   .pop-actions{display:flex;justify-content:space-between;margin-top:12px;}
   .pop-actions .rm{background:none;border:none;color:var(--wrong-ink);font-size:12.5px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;}
   .pop-actions .cl{background:none;border:none;color:#9485AE;font-size:12.5px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;}
+  .pop-move{display:flex;align-items:center;justify-content:space-between;margin-top:11px;gap:8px;}
+  .pop-move button{background:var(--soft);border:1.4px solid var(--deep);color:var(--deepest);border-radius:16px;padding:6px 13px;font-size:12.5px;font-weight:700;font-family:'Noto Sans KR';cursor:pointer;}
+  .pop-move button:active{background:#E7D6F5;}
+  .pop-move .pos{font-size:12px;color:#9485AE;}
   .pop-tip{font-size:11px;color:#9485AE;margin-top:4px;}
 
   /* attempts log */
@@ -464,7 +468,7 @@ function renderStage(){
       +'<span class="note-label">MY SYNTAX NOTE <span>· 답안 배치</span></span>'
       +'<div class="'+stripCls+'" id="strip">'+toks+'<span class="tok-add" id="addTok">＋ 단어</span></div>'
       +(st.undo?('<div class="undo-row"><button class="undo-btn" id="undoBtn">↩︎ 방금 지운 &lsquo;'+esc(st.undo.t.text)+'&rsquo; 되돌리기</button></div>'):'')
-      +'<div class="builder-hint">보기 단어를 <b>탭</b>해 배치 · 배치된 단어를 <b>탭</b>하면 제거(실수로 지워도 <b>되돌리기</b>) · <b>꾹 누르거나 더블탭</b>하면 형태 변형(-s·-ing·과거형 등) · <b>＋단어</b>로 보기에 없는 단어 추가</div>'
+      +'<div class="builder-hint">보기 단어를 <b>탭</b>해 배치 · 배치된 단어를 <b>탭</b>하면 제거(실수로 지워도 <b>되돌리기</b>) · <b>꾹 누르거나 더블탭</b>하면 형태 변형(-s·-ing·과거형 등) · <b>＋단어</b>로 보기에 없는 단어를 타이핑해 추가 · 배치된 단어를 <b>꾹 눌러</b> 뜨는 <b>◀ ▶</b>로 위치 이동</div>'
       +'<img class="note-coffee" src="'+sticker('b_06')+'" alt="">'
       +'<div class="row"><button class="submit" id="submitBtn">제출하기</button><span class="try-count">Attempt <b>'+st.tryNum+'</b> / '+MAX+'</span></div>'
       +'</div>';
@@ -538,6 +542,7 @@ function openTransform(p,st,ti){
     +'<div class="pop-forms">'+chips+'</div>'
     +'<div class="pop-direct"><input id="dinp" placeholder="직접 입력…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" value="'+esc(t.text)+'"><button id="dok">적용</button></div>'
     +'<div class="pop-tip">불규칙·특수 형태는 직접 입력하세요. 대소문자는 채점에 영향 없어요.</div>'
+    +'<div class="pop-move"><button id="mvL">◀ 앞으로</button><span class="pos">'+(ti+1)+' / '+st.placed.length+' 번째</span><button id="mvR">뒤로 ▶</button></div>'
     +'<div class="pop-actions"><button class="rm" id="rmBtn">이 단어 제거</button><button class="cl" id="clBtn">닫기</button></div>'
     +'</div></div>';
   document.getElementById('mask').addEventListener('click',e=>{if(e.target.id==='mask')closePop();});
@@ -545,6 +550,9 @@ function openTransform(p,st,ti){
   document.getElementById('dok').addEventListener('click',()=>{const v=document.getElementById('dinp').value.trim();if(v){applyForm(st,ti,v);closePop();renderStage();}});
   document.getElementById('dinp').addEventListener('keydown',e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v){applyForm(st,ti,v);closePop();renderStage();}}});
   document.getElementById('rmBtn').addEventListener('click',()=>{removeToken(st,ti);closePop();renderStage();});
+  const _mv=(dir)=>{const nt=ti+dir;if(nt<0||nt>=st.placed.length)return;const a=st.placed,tmp=a[ti];a[ti]=a[nt];a[nt]=tmp;st.undo=null;renderStage();openTransform(p,st,nt);};
+  document.getElementById('mvL').addEventListener('click',()=>_mv(-1));
+  document.getElementById('mvR').addEventListener('click',()=>_mv(1));
   document.getElementById('clBtn').addEventListener('click',closePop);
 }
 function applyForm(st,ti,val){const t=st.placed[ti];if(!t)return;t.text=val;t.changed=(norm(val)!==norm(t.base));st.undo=null;}
